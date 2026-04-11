@@ -1,0 +1,24 @@
+## Summary
+
+This PR addresses the performance issue reported in [#112](https://github.com/m3t4f1v3/voxy/issues/112), where the `allChanged()` method triggers a full rendering system rebuild, causing approximately 5-second freezes during gameplay.
+
+## Problem Description
+
+As described in the linked issue, the current implementation of `allChanged()` results in significant stuttering due to:
+- Full renderer recreation being triggered on every call
+- Unnecessary `System.gc()` invocations adding overhead
+- Double `glFinish()` calls causing excessive GPU synchronization
+
+## Changes Made
+
+- **Added debounce/cooldown mechanism**: Prevents rapid successive renderer recreations by introducing a cooldown period
+- **Removed unnecessary `System.gc()` call**: Eliminates forced garbage collection that was contributing to lag spikes
+- **Replaced double `glFinish()` with single `glFlush()`**: Reduces GPU synchronization overhead while maintaining correctness
+
+## Testing
+
+The changes have been built locally and tested in-game. The performance issues described in #112 are now resolved, with no more noticeable freezes during normal gameplay.
+
+## Notes
+
+I noticed that the original issue has not yet received a response or fix from the author. I hope this contribution can help improve the experience for users encountering this problem. Please let me know if any adjustments are needed.

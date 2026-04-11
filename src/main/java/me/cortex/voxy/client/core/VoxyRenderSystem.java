@@ -84,8 +84,6 @@ public class VoxyRenderSystem {
         world.acquireRef();
         Logger.info("Creating Voxy render system");
 
-        System.gc();
-
         if (Minecraft.getInstance().options.renderDistance().get()<3) {
             String msg = "Voxy: Having a vanilla render distance of 2 can cause rare culling near the edge of your screen issues, please use 3 or more";
             Logger.warn(msg);
@@ -100,8 +98,7 @@ public class VoxyRenderSystem {
 
         try {
             //wait for opengl to be finished, this should hopefully ensure all memory allocations are free
-            glFinish();
-            glFinish();
+            glFlush();
 
             this.worldIn = world;
 
