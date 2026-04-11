@@ -9,6 +9,7 @@ import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import org.jetbrains.annotations.Nullable;
@@ -24,6 +25,13 @@ public abstract class MixinLevelRenderer implements IGetVoxyRenderSystem {
     @Shadow private @Nullable ClientLevel level;
     @Unique private VoxyRenderSystem renderer;
 
+    @Unique
+    private static final long COOLDOWN_MS = 5000L;
+    @Unique
+    private volatile long voxy$lastRebuildTime;
+    @Unique
+    private volatile boolean voxy$pendingRebuild;
+
     @Override
     public VoxyRenderSystem getVoxyRenderSystem() {
         return this.renderer;
@@ -31,6 +39,42 @@ public abstract class MixinLevelRenderer implements IGetVoxyRenderSystem {
 
     @Inject(method = "allChanged()V", at = @At("RETURN"), order = 900)//We want to inject before sodium
     private void reloadVoxyRenderer(CallbackInfo ci) {
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastRebuild = currentTime - this.voxy$lastRebuildTime;
+    
+        if (timeSinceLastRebuild >= COOLDOWN_MS) {
+            // Enough time has passed, execute immediately
+            this.voxy$lastRebuildTime = currentTime;
+            this.voxy$pendingRebuild = false;
+            this.executeRebuild();
+        } else {
+            // Within cooldown, schedule deferred execution using a simple daemon thread
+            if (!this.voxy$pendingRebuild) {
+                this.voxy$pendingRebuild = true;
+                long delay = COOLDOWN_MS - timeSinceLastRebuild;
+                Thread delayThread = new Thread(() -> {
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    if (this.voxy$pendingRebuild) {
+                        this.voxy$pendingRebuild = false;
+                        Minecraft.getInstance().execute(() -> {
+                            this.voxy$lastRebuildTime = System.currentTimeMillis();
+                            this.executeRebuild();
+                        });
+                    }
+                });
+                delayThread.setDaemon(true);
+                delayThread.setName("Voxy-Debounce");
+                delayThread.start();
+            }
+        }
+    }
+
+    @Unique
+    private void executeRebuild() {
         this.shutdownRenderer();
         if (this.level != null) {
             this.createRenderer();
